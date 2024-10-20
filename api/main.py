@@ -18,7 +18,7 @@ def download_file(url):
     if response.status_code == 200:
         # Déterminer le type de fichier et suffixe approprié
         suffix = os.path.splitext(url)[1]  # Obtenir l'extension du fichier
-        valid_suffixes = ['.pdf', '.docx', '.doc', '.html', '.txt', '.jpg', '.png', '.jpeg']
+        valid_suffixes = ['.pdf', '.docx', '.doc', '.html', '.txt']
         if suffix not in valid_suffixes:
             return None
         
@@ -77,12 +77,7 @@ def handle_request():
                     mime_type = "text/html"
                 elif file_path.endswith('.txt'):
                     mime_type = "text/plain"
-                elif file_path.endswith('.jpg') or file_path.endswith('.jpeg'):
-                    mime_type = "image/jpeg"
-                elif file_path.endswith('.png'):
-                    mime_type = "image/png"
                 
-                # Télécharger le fichier vers l'API Gemini
                 file = upload_to_gemini(file_path, mime_type)
                 if file:
                     history.append({
