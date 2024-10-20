@@ -3,7 +3,6 @@ import os
 import requests
 import tempfile
 import google.generativeai as genai
-from mimetypes import guess_type
 
 # Configurer l'API Gemini avec votre clé API
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
@@ -17,30 +16,19 @@ def download_file(url):
     """Télécharge un fichier depuis une URL et retourne le chemin du fichier temporaire."""
     response = requests.get(url, stream=True)
     if response.status_code == 200:
-        # Déterminer l'extension du fichier à partir de l'URL ou du contenu
-        mime_type, encoding = guess_type(url)
-        if not mime_type:
-            mime_type = 'application/octet-stream'  # Type générique si non détecté
-
-        # Définir l'extension en fonction du type MIME
-        extension = {
-            'application/pdf': '.pdf',
-            'text/plain': '.txt',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
-            'text/html': '.html',
-            'application/msword': '.doc',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
-            'image/jpeg': '.jpg',
-            'image/png': '.png',
-        }.get(mime_type, '.bin')  # Par défaut '.bin'
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=extension) as temp_file:
+        # Déterminer le type de fichier et suffixe approprié
+        suffix = os.path.splitext(url)[1]  # Obtenir l'extension du fichier
+        valid_suffixes = ['.pdf', '.docx', '.doc', '.html', '.txt']
+        if suffix not in valid_suffixes:
+            return None
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
             for chunk in response.iter_content(chunk_size=8192):
                 temp_file.write(chunk)
             temp_file.flush()
-            return temp_file.name, mime_type
+            return temp_file.name
     else:
-        return None, None
+        return None
 
 def upload_to_gemini(path, mime_type=None):
     """Télécharge le fichier donné sur Gemini."""
@@ -67,18 +55,30 @@ def handle_request():
         data = request.json
         prompt = data.get('prompt', '')  # Question ou prompt de l'utilisateur
         custom_id = data.get('customId', '')  # Identifiant de l'utilisateur ou session
-        file_url = data.get('link', '')  # URL du fichier (image ou autre)
+        file_url = data.get('link', '')  # URL du fichier
 
         # Récupérer l'historique de la session existante ou en créer une nouvelle
         if custom_id not in sessions:
             sessions[custom_id] = []  # Nouvelle session
         history = sessions[custom_id]
 
-        # Ajouter le fichier (image ou autre) à l'historique si présent
+        # Ajouter le fichier à l'historique s'il est présent
         if file_url:
-            file_path, mime_type = download_file(file_url)
+            file_path = download_file(file_url)
             if file_path:
-                file = upload_to_gemini(file_path, mime_type=mime_type)
+                mime_type = "application/octet-stream"  # Définir un type MIME par défaut
+                if file_path.endswith('.pdf'):
+                    mime_type = "application/pdf"
+                elif file_path.endswith('.docx'):
+                    mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                elif file_path.endswith('.doc'):
+                    mime_type = "application/msword"
+                elif file_path.endswith('.html'):
+                    mime_type = "text/html"
+                elif file_path.endswith('.txt'):
+                    mime_type = "text/plain"
+                
+                file = upload_to_gemini(file_path, mime_type)
                 if file:
                     history.append({
                         "role": "user",
