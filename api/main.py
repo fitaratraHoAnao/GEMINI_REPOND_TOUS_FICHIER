@@ -5,7 +5,7 @@ import tempfile
 import google.generativeai as genai
 
 # Configurer l'API Gemini avec votre clé API
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
 
 app = Flask(__name__)
 
@@ -18,7 +18,7 @@ def download_file(url):
     if response.status_code == 200:
         # Déterminer le type de fichier et suffixe approprié
         suffix = os.path.splitext(url)[1]  # Obtenir l'extension du fichier
-        valid_suffixes = ['.pdf', '.docx', '.doc', '.html', '.txt']
+        valid_suffixes = ['.pdf', '.docx', '.doc', '.html', '.txt', '.png', '.jpg', '.jpeg']
         if suffix not in valid_suffixes:
             return None
         
@@ -32,21 +32,6 @@ def download_file(url):
 
 def upload_to_gemini(path, mime_type=None):
     """Télécharge le fichier donné sur Gemini."""
-    if not mime_type:
-        mime_type = "application/octet-stream"  # Type MIME par défaut
-    
-    # Définir correctement le type MIME pour les formats pris en charge
-    if path.endswith('.pdf'):
-        mime_type = "application/pdf"
-    elif path.endswith('.docx'):
-        mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    elif path.endswith('.doc'):
-        mime_type = "application/msword"
-    elif path.endswith('.html'):
-        mime_type = "text/html"
-    elif path.endswith('.txt'):
-        mime_type = "text/plain"
-
     file = genai.upload_file(path, mime_type=mime_type)
     return file
 
@@ -77,11 +62,12 @@ def handle_request():
             sessions[custom_id] = []  # Nouvelle session
         history = sessions[custom_id]
 
-        # Télécharger et ajouter le fichier à l'historique s'il est présent
+        # Ajouter le fichier à l'historique s'il est présent
         if file_url:
             file_path = download_file(file_url)
             if file_path:
-                mime_type = "application/octet-stream"  # Type MIME par défaut
+                # Déterminer le type MIME du fichier
+                mime_type = "application/octet-stream"  # Définir un type MIME par défaut
                 if file_path.endswith('.pdf'):
                     mime_type = "application/pdf"
                 elif file_path.endswith('.docx'):
@@ -92,7 +78,12 @@ def handle_request():
                     mime_type = "text/html"
                 elif file_path.endswith('.txt'):
                     mime_type = "text/plain"
+                elif file_path.endswith('.png'):
+                    mime_type = "image/png"
+                elif file_path.endswith('.jpg') or file_path.endswith('.jpeg'):
+                    mime_type = "image/jpeg"
                 
+                # Télécharger le fichier sur Gemini
                 file = upload_to_gemini(file_path, mime_type)
                 if file:
                     history.append({
