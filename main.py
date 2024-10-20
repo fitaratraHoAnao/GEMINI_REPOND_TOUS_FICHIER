@@ -14,31 +14,39 @@ sessions = {}
 
 def download_file(url):
     """Télécharge un fichier depuis une URL et retourne le chemin du fichier temporaire."""
-    try:
-        response = requests.get(url, stream=True)
-        print(f"Response status code: {response.status_code}")  # Affiche le code de statut
-        if response.status_code == 200:
-            # Déterminer le type de fichier et suffixe approprié
-            suffix = os.path.splitext(url)[1]  # Obtenir l'extension du fichier
-            valid_suffixes = ['.pdf', '.docx', '.doc', '.html', '.txt', '.png', '.jpg', '.jpeg']
-            if suffix not in valid_suffixes:
-                print(f"Invalid file suffix: {suffix}")  # Affiche un message si le suffixe est invalide
-                return None
-            
-            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
-                for chunk in response.iter_content(chunk_size=8192):
-                    temp_file.write(chunk)
-                temp_file.flush()
-                return temp_file.name
-        else:
-            print(f"Failed to download file. Status code: {response.status_code}")  # Affiche le code de statut si échec
+    response = requests.get(url, stream=True)
+    if response.status_code == 200:
+        # Déterminer le type de fichier et suffixe approprié
+        suffix = os.path.splitext(url)[1]  # Obtenir l'extension du fichier
+        valid_suffixes = ['.pdf', '.docx', '.doc', '.html', '.txt']
+        if suffix not in valid_suffixes:
             return None
-    except Exception as e:
-        print(f"Error downloading file: {e}")  # Affiche l'erreur en cas d'exception
+        
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+            for chunk in response.iter_content(chunk_size=8192):
+                temp_file.write(chunk)
+            temp_file.flush()
+            return temp_file.name
+    else:
         return None
 
 def upload_to_gemini(path, mime_type=None):
     """Télécharge le fichier donné sur Gemini."""
+    if not mime_type:
+        mime_type = "application/octet-stream"  # Type MIME par défaut
+    
+    # Définir correctement le type MIME pour les formats pris en charge
+    if path.endswith('.pdf'):
+        mime_type = "application/pdf"
+    elif path.endswith('.docx'):
+        mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    elif path.endswith('.doc'):
+        mime_type = "application/msword"
+    elif path.endswith('.html'):
+        mime_type = "text/html"
+    elif path.endswith('.txt'):
+        mime_type = "text/plain"
+
     file = genai.upload_file(path, mime_type=mime_type)
     return file
 
@@ -69,12 +77,11 @@ def handle_request():
             sessions[custom_id] = []  # Nouvelle session
         history = sessions[custom_id]
 
-        # Ajouter le fichier à l'historique s'il est présent
+        # Télécharger et ajouter le fichier à l'historique s'il est présent
         if file_url:
             file_path = download_file(file_url)
             if file_path:
-                # Déterminer le type MIME en fonction de l'extension
-                mime_type = "application/octet-stream"  # Définir un type MIME par défaut
+                mime_type = "application/octet-stream"  # Type MIME par défaut
                 if file_path.endswith('.pdf'):
                     mime_type = "application/pdf"
                 elif file_path.endswith('.docx'):
@@ -85,10 +92,6 @@ def handle_request():
                     mime_type = "text/html"
                 elif file_path.endswith('.txt'):
                     mime_type = "text/plain"
-                elif file_path.endswith('.png'):
-                    mime_type = "image/png"
-                elif file_path.endswith('.jpg') or file_path.endswith('.jpeg'):
-                    mime_type = "image/jpeg"
                 
                 file = upload_to_gemini(file_path, mime_type)
                 if file:
